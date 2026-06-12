@@ -1,0 +1,28 @@
+version: "3.9"
+
+services:
+  postgres:
+    image: postgres:16
+    container_name: postgres
+    restart: unless-stopped
+
+    environment:
+      POSTGRES_USER: dba_admin
+      POSTGRES_PASSWORD: Agent9-Backtalk6-Zestfully5-Luxury1-Calculus2
+      POSTGRES_DB: metastore
+
+    ports:
+      - "5433:5432"
+
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+    networks:
+      - lakehouse
+
+networks:
+  lakehouse:
+    external: true
+
+volumes:
+  postgres_data:

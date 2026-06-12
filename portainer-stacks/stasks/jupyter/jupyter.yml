@@ -1,0 +1,45 @@
+version: "3.9"
+
+services:
+  jupyter:
+    image: jupyter/pyspark-notebook:spark-3.5.0
+    container_name: jupyter
+    restart: unless-stopped
+
+    ports:
+      - "8888:8888"
+      - "4040:4040"
+
+    environment:
+      JUPYTER_ENABLE_LAB: "yes"
+      JUPYTER_TOKEN: "lakehouse"
+
+      AWS_ACCESS_KEY_ID: admin_minio
+      AWS_SECRET_ACCESS_KEY: Grunt9-Relenting6-Hula5-Catcall9-Residue3
+      AWS_REGION: us-east-1
+
+    volumes:
+      # 🔹 Área de trabalho (onde você DEVE salvar seus notebooks)
+      - jupyter_data:/home/jovyan/work
+
+      # 🔹 Templates / exemplos (somente leitura)
+      - "C:/Users/lipel/Documents/data-lakehouse/portainer-stacks/stacks/configs/notebooks:/home/jovyan/work/examples:ro"
+
+      # 🔹 Config do Spark
+      - "C:/Users/lipel/Documents/data-lakehouse/portainer-stacks/stacks/configs/spark-defaults.conf:/usr/local/spark/conf/spark-defaults.conf:ro"
+
+    networks:
+      - lakehouse
+
+    command: >
+      bash -c "
+        pip install --user --quiet pyiceberg boto3 s3fs &&
+        start-notebook.sh
+      "
+
+networks:
+  lakehouse:
+    external: true
+
+volumes:
+  jupyter_data:

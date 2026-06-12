@@ -1,0 +1,192 @@
+version: "3.9"
+
+# =============================================================
+#  SPARK + ICEBERG  ─  Cluster standalone
+#  Imagem oficial: apache/spark (Apache Software Foundation)
+#  Jars Iceberg + AWS SDK baixados no init do master e montados
+#  via volume compartilhado nos workers.
+#  Depende de: minio (network lakehouse)
+# =============================================================
+
+x-spark-env: &spark-env
+  SPARK_NO_DAEMONIZE: "true"
+  SPARK_HOME: /opt/spark
+
+  # ── MinIO / S3A ──────────────────────────────────────────
+  AWS_ACCESS_KEY_ID: admin_minio
+  AWS_SECRET_ACCESS_KEY: Grunt9-Relenting6-Hula5-Catcall9-Residue3
+  AWS_REGION: sa-east-1
+
+# ──────────────────────────────────────────────────────────────
+
+services:
+
+  # ------------------------------------------------------------
+  #  init-jars: job único que baixa os jars do Iceberg/S3A
+  #  antes do master subir. Roda e termina (restart: no).
+  # ------------------------------------------------------------
+  spark-init-jars:
+    image: apache/spark:3.5.3
+    container_name: spark-init-jars
+    restart: "no"
+
+    user: root
+
+    volumes:
+      - spark_jars:/opt/spark/jars/iceberg
+
+    networks:
+      - lakehouse
+
+    command: >
+      bash -c "
+        set -e
+        JAR_DIR=/opt/spark/jars/iceberg
+        mkdir -p $$JAR_DIR
+
+        dl() {
+          local url=$$1 file=$$JAR_DIR/$$2
+          [ -f $$file ] && echo '✓ já existe:' $$2 && return
+          echo '⬇ baixando' $$2 ...
+          curl -fsSL --retry 3 $$url -o $$file
+          echo '✅' $$2
+        }
+
+        ICEBERG=1.5.2
+        SCALA=2.12
+        HADOOP=3.3.4
+        AWS_SDK=1.12.262
+        MAVEN=https://repo1.maven.org/maven2
+
+        dl $$MAVEN/org/apache/iceberg/iceberg-spark-runtime-3.5_$$SCALA/$$ICEBERG/iceberg-spark-runtime-3.5_$$SCALA-$$ICEBERG.jar \
+           iceberg-spark-runtime-3.5.jar
+
+        dl $$MAVEN/org/apache/hadoop/hadoop-aws/$$HADOOP/hadoop-aws-$$HADOOP.jar \
+           hadoop-aws.jar
+
+        dl $$MAVEN/com/amazonaws/aws-java-sdk-bundle/$$AWS_SDK/aws-java-sdk-bundle-$$AWS_SDK.jar \
+           aws-java-sdk-bundle.jar
+
+        echo '🎉 Todos os jars prontos em' $$JAR_DIR
+        ls -lh $$JAR_DIR
+      "
+
+  # ------------------------------------------------------------
+  #  Spark Master
+  # ------------------------------------------------------------
+  spark-master:
+    image: apache/spark:3.5.3
+    container_name: spark-master
+    hostname: spark-master
+
+    restart: unless-stopped
+
+    depends_on:
+      spark-init-jars:
+        condition: service_completed_successfully
+
+    ports:
+      - "7077:7077"   # Spark master RPC
+      - "8080:8080"   # Spark master UI
+
+    environment:
+      <<: *spark-env
+      SPARK_MASTER_HOST: spark-master
+      SPARK_MASTER_PORT: "7077"
+      SPARK_MASTER_WEBUI_PORT: "8080"
+
+    volumes:
+      - spark_jars:/opt/spark/jars/iceberg:ro
+      - "C:/Users/lipel/Documents/data-lakehouse/portainer-stacks/stacks/configs/spark-defaults.conf:/opt/spark/conf/spark-defaults.conf:ro"
+
+    networks:
+      - lakehouse
+
+    user: root
+
+    command: >
+      bash -c "/opt/spark/bin/spark-class org.apache.spark.deploy.master.Master"
+
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080"]
+      interval: 15s
+      timeout: 10s
+      retries: 5
+      start_period: 20s
+
+  # ------------------------------------------------------------
+  #  Spark Worker 1
+  # ------------------------------------------------------------
+  spark-worker-1:
+    image: apache/spark:3.5.3
+    container_name: spark-worker-1
+    hostname: spark-worker-1
+
+    restart: unless-stopped
+
+    depends_on:
+      spark-master:
+        condition: service_healthy
+
+    ports:
+      - "8081:8081"   # Worker 1 UI
+
+    environment:
+      <<: *spark-env
+      SPARK_WORKER_WEBUI_PORT: "8081"
+      SPARK_WORKER_CORES: "2"
+      SPARK_WORKER_MEMORY: 2g
+
+    volumes:
+      - spark_jars:/opt/spark/jars/iceberg:ro
+      - "C:/Users/lipel/Documents/data-lakehouse/portainer-stacks/stacks/configs/spark-defaults.conf:/opt/spark/conf/spark-defaults.conf:ro"
+
+    networks:
+      - lakehouse
+
+    user: root
+
+    command: >
+      bash -c "/opt/spark/bin/spark-class org.apache.spark.deploy.worker.Worker spark://spark-master:7077"
+
+  # ------------------------------------------------------------
+  #  Spark Worker 2
+  # ------------------------------------------------------------
+  spark-worker-2:
+    image: apache/spark:3.5.3
+    container_name: spark-worker-2
+    hostname: spark-worker-2
+
+    restart: unless-stopped
+
+    depends_on:
+      spark-master:
+        condition: service_healthy
+
+    ports:
+      - "8082:8081"   # Worker 2 UI (host:8082 → container:8081)
+
+    environment:
+      <<: *spark-env
+      SPARK_WORKER_WEBUI_PORT: "8081"
+      SPARK_WORKER_CORES: "2"
+      SPARK_WORKER_MEMORY: 2g
+
+    volumes:
+      - spark_jars:/opt/spark/jars/iceberg:ro
+      - "C:/Users/lipel/Documents/data-lakehouse/portainer-stacks/stacks/configs/spark-defaults.conf:/opt/spark/conf/spark-defaults.conf:ro"
+
+    networks:
+      - lakehouse
+
+    user: root
+
+    command: >
+      bash -c "/opt/spark/bin/spark-class org.apache.spark.deploy.worker.Worker spark://spark-master:7077"
+
+networks:
+  lakehouse:
+    external: true
+
+volumes:
+  spark_jars:   # jars compartilhados entre init, master e workers

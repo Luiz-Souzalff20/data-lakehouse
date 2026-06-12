@@ -1,0 +1,24 @@
+version: "3.9"
+
+services:
+  dbeaver:
+    image: dbeaver/cloudbeaver:ea
+    container_name: dbeaver
+
+    restart: unless-stopped
+
+    ports:
+      - "8978:8978"
+
+    volumes:
+      - dbeaver_data:/opt/cloudbeaver/workspace
+
+    networks:
+      - lakehouse
+
+networks:
+  lakehouse:
+    external: true
+
+volumes:
+  dbeaver_data:
