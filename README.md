@@ -43,7 +43,7 @@ Projeto de engenharia de dados containerizado, com arquitetura medalhão (bronze
               ┌────────┴────────┐                                          │
               ▼                 ▼                                          ▼
          ┌─────────┐      ┌──────────┐                          Job 4 exporta Ouro
-         │ DBeaver │      │ Metabase │ (futuro)                  para Postgres
+         │ DBeaver │      │ Metabase │                 para Postgres
          └─────────┘      └──────────┘                                    │
                                                                             ▼
                                                                      ┌──────────┐
@@ -53,7 +53,7 @@ Projeto de engenharia de dados containerizado, com arquitetura medalhão (bronze
                                                                            │
                                                                            ▼
                                                                      ┌──────────┐
-                                                                     │ Grafana  │ (futuro)
+                                                                     │ Grafana  │
                                                                      └──────────┘
 ```
 
@@ -68,7 +68,7 @@ Projeto de engenharia de dados containerizado, com arquitetura medalhão (bronze
 | **Bronze** | Dados brutos, sem transformação, espelho da fonte (API/DB) | Iceberg (Parquet) | `01_extracao_bronze.ipynb` | Spark (escrita), Trino (leitura) |
 | **Prata** | Dados limpos, tipados, deduplicados, com regras de qualidade | Iceberg (Parquet) | `02_tratamento_prata.ipynb` | Spark (escrita), Trino (leitura) |
 | **Ouro** | Tabelas dimensionais e fato (modelo estrela) | Iceberg (Parquet) | `03_modelagem_ouro.ipynb` | Spark (escrita), Trino (leitura) |
-| **Ouro -> Postgres** | Export das tabelas Ouro para banco analítico | Tabelas Postgres | `04_carga_postgres.ipynb` | Spark (escrita), Metabase/Grafana (leitura futura) |
+| **Ouro -> Postgres** | Export das tabelas Ouro para banco analítico | Tabelas Postgres | `04_carga_postgres.ipynb` | Spark (escrita), Metabase/Grafana (leitura) |
 
 > Todas as camadas (incluindo Ouro) são gravadas primeiro em Iceberg/MinIO, garantindo versionamento, consulta via Trino e histórico de snapshots. A camada Ouro é, em seguida, **replicada para o Postgres** (Job 4) para consumo por ferramentas de BI tradicionais.
 
@@ -82,8 +82,8 @@ Projeto de engenharia de dados containerizado, com arquitetura medalhão (bronze
 | `spark-jupyter` | Notebooks Spark para ETL (extração, transformação, modelagem, carga) | ✅ |
 | `jenkins` | **Orquestrador**: agenda e executa os notebooks `.ipynb` em sequência | ✅ |
 | `dbeaver` | Cliente SQL para consulta via Trino/Postgres | ✅ |
-| `metabase` | Dashboards e BI sobre a camada Ouro (Postgres) | 🔜 |
-| `grafana` | Monitoramento e dashboards operacionais | 🔜 |
+| `metabase` | Dashboards e BI sobre a camada Ouro (Postgres) | ✅ |
+| `grafana` | Monitoramento e dashboards operacionais | ✅ |
 
 ## Estrutura de Pastas
 
@@ -92,6 +92,8 @@ Data-Lakehouse
 ├── portainer-stacks
 │   ├── dbeaver
 │   │   └── dbeaver.yml
+│   ├── grafana
+│   │   └── grafana.yml
 │   ├── jenkins
 │   │   ├── jenkins.yml
 │   │   └── jobs
@@ -103,6 +105,8 @@ Data-Lakehouse
 │   │       │   └── Jenkinsfile
 │   │       └── 04-carga-postgres
 │   │           └── Jenkinsfile
+│   ├── metabase
+│   │   └── metabase.yml
 │   ├── minio
 │   │   └── minio.yml
 │   ├── postgres
@@ -176,6 +180,10 @@ docker compose -f portainer-stacks/trino/trino.yml up -d
 # 5. Orquestração e clientes
 docker compose -f portainer-stacks/jenkins/jenkins.yml up -d
 docker compose -f portainer-stacks/dbeaver/dbeaver.yml up -d
+
+# 6. BI e monitoramento
+docker compose -f portainer-stacks/metabase/metabase.yml up -d
+docker compose -f portainer-stacks/grafana/grafana.yml up -d
 ```
 
 ## Fluxo de ETL (orquestrado pelo Jenkins)
@@ -261,15 +269,17 @@ SELECT * FROM iceberg.ouro.tab_fato_vendas LIMIT 10;
 SELECT * FROM iceberg.bronze."data_api$history";
 ```
 
-A camada Ouro também é consultável diretamente no Postgres (`analytics.ouro.*`), após o Job 4 (futuramente via Metabase/Grafana).
+A camada Ouro também é consultável diretamente no Postgres (`analytics.ouro.*`), após o Job 4, via Metabase/Grafana.
+
+## Próxima Feature
+
+A próxima etapa do projeto é **migrar a orquestração de containers para Docker Swarm**, substituindo os deploys individuais via Portainer/Compose por stacks gerenciadas em modo Swarm (`docker stack deploy`), com os benefícios de orquestração nativa: réplicas, rolling updates, Docker Secrets para credenciais, overlay networks e healthchecks integrados.
 
 ## Próximos Passos
 
 - [ ] Migrar a orquestração de containers para **Docker Swarm**
 - [ ] Criar os `Jenkinsfile`s dos 4 jobs (`01` a `04`) com execução via `papermill`
 - [ ] Configurar o encadeamento e o agendamento (`cron`) da pipeline completa no Jenkins
-- [ ] Adicionar stack **Metabase** para dashboards sobre a camada Ouro (Postgres)
-- [ ] Adicionar stack **Grafana** para monitoramento operacional e da pipeline (status dos jobs Jenkins)
 - [ ] Adicionar testes de qualidade de dados (ex: Great Expectations) entre camadas, como etapa dos jobs
 - [ ] Configurar notificações do Jenkins (e-mail/Slack) em caso de falha de algum job
 
