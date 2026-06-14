@@ -1,0 +1,41 @@
+version: "3.9"
+
+services:
+
+  metabase:
+    image: metabase/metabase:latest
+
+    container_name: metabase
+
+    ports:
+      - "3000:3000"
+
+    environment:
+      # Metabase usa H2 (embutido) por padrão.
+      # Para usar o Postgres como banco de metadados do próprio Metabase
+      # (recomendado em produção), descomente as linhas abaixo e crie
+      # o database "metabase" no Postgres antes de subir:
+      #   CREATE DATABASE metabase;
+      #
+      # MB_DB_TYPE: postgres
+      # MB_DB_DBNAME: metabase
+      # MB_DB_PORT: 5432
+      # MB_DB_USER: dba_admin
+      # MB_DB_PASS: Agent9-Backtalk6-Zestfully5-Luxury1-Calculus2
+      # MB_DB_HOST: postgres
+      JAVA_TIMEZONE: America/Sao_Paulo
+
+    volumes:
+      - metabase_data:/metabase-data
+
+    restart: unless-stopped
+
+    networks:
+      - lakehouse
+
+volumes:
+  metabase_data:
+
+networks:
+  lakehouse:
+    external: true

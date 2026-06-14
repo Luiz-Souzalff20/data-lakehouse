@@ -11,61 +11,78 @@ Projeto de engenharia de dados containerizado, com arquitetura medalhão (bronze
                 └──────┬───────┘
                        │
                        ▼
-            ┌─────────────────────┐
-            │  Jenkins (orquestra) │
-            │  executa .ipynb via  │
-            │  Spark (Jupyter)     │
-            └──────────┬───────────┘
-                       │
-        ┌──────────────┼──────────────┐
-        ▼               ▼              ▼
-    ┌────────┐     ┌─────────┐    ┌─────────┐
-    │ Bronze │ --> │  Prata  │ -->│  Ouro   │
-    │ (raw)  │     │(cleaned)│    │ (agg.)  │
-    └────────┘     └─────────┘    └────┬────┘
-        │               │               │
-        └──── MinIO (S3) + Iceberg ─────┘
-                       │
-                       ▼
-                  ┌─────────┐
-                  │  Trino  │ ── consulta Bronze e Prata
-                  └────┬────┘
-                       │
-              ┌────────┴────────┐
-              ▼                 ▼
-         ┌─────────┐      ┌──────────┐
-         │ DBeaver │      │ Metabase │ (futuro)
-         └─────────┘      └──────────┘
-
-   Camada Ouro -> exportada para Postgres (banco analítico)
-                          │
-                          ▼
-                     ┌──────────┐
-                     │ Grafana  │ (futuro)
-                     └──────────┘
+            ┌──────────────────────┐
+            │       Jenkins         │
+            │  (orquestrador)        │
+            │                        │
+            │  Job 1 -> 01_extracao  │──┐
+            │  Job 2 -> 02_tratamento│  │
+            │  Job 3 -> 03_modelagem │  │  executa cada
+            │  Job 4 -> 04_carga_pg  │  │  notebook .ipynb
+            └───────────┬────────────┘  │  via Spark
+                        │ aciona em      │
+                        │ sequência      ▼
+                        │         ┌─────────────┐
+                        └────────▶│Spark/Jupyter│
+                                  └──────┬──────┘
+                                         │
+        ┌────────────────────────────────┼────────────────────────────────┐
+        ▼                                ▼                                 ▼
+    ┌────────┐                     ┌─────────┐                       ┌─────────┐
+    │ Bronze │ ── Job 1 grava ──▶  │  Prata  │ ── Job 2 grava ──▶    │  Ouro   │
+    │ (raw)  │                     │(cleaned)│                       │ (dim/   │
+    └────────┘                     └─────────┘                       │  fato)  │
+        │                               │                             └────┬────┘
+        └────────── MinIO (S3) + Iceberg ──────────────────────────────────┘
+                       │                                                    │
+                       ▼                                              Job 3 grava
+                  ┌─────────┐                                              │
+                  │  Trino  │ ── consulta Bronze, Prata e Ouro             │
+                  └────┬────┘                                              │
+                       │                                                    │
+              ┌────────┴────────┐                                          │
+              ▼                 ▼                                          ▼
+         ┌─────────┐      ┌──────────┐                          Job 4 exporta Ouro
+         │ DBeaver │      │ Metabase │ (futuro)                  para Postgres
+         └─────────┘      └──────────┘                                    │
+                                                                            ▼
+                                                                     ┌──────────┐
+                                                                     │ Postgres │
+                                                                     │(analytics)│
+                                                                     └─────┬────┘
+                                                                           │
+                                                                           ▼
+                                                                     ┌──────────┐
+                                                                     │ Grafana  │ (futuro)
+                                                                     └──────────┘
 ```
 
-**Catálogo Iceberg**: metastore JDBC compartilhado no Postgres, usado tanto pelo Spark (escrita) quanto pelo Trino (leitura).
+**Catálogo Iceberg**: metastore JDBC compartilhado no Postgres (`metastore`), usado tanto pelo Spark (escrita) quanto pelo Trino (leitura).
+
+**Orquestração**: o Jenkins é o ponto central de execução do pipeline. Cada etapa do ETL (Bronze, Prata, Ouro, Carga Postgres) é um **job Jenkins independente**, que executa o respectivo notebook `.ipynb` (via `papermill` ou `jupyter nbconvert --execute`) no container Spark/Jupyter. Os jobs são encadeados (Job 1 → Job 2 → Job 3 → Job 4), formando uma pipeline sequencial — sem execução manual dos notebooks.
 
 ## Camadas (Medalhão)
 
-| Camada | Conteúdo | Formato | Acesso |
-|---|---|---|---|
-| **Bronze** | Dados brutos, sem transformação, espelho da fonte (API/DB) | Iceberg (Parquet) | Spark (escrita), Trino (leitura) |
-| **Prata** | Dados limpos, tipados, deduplicados, com regras de qualidade | Iceberg (Parquet) | Spark (escrita), Trino (leitura) |
-| **Ouro** | Dados agregados/modelados para consumo analítico | Tabelas Postgres | Spark/Trino (escrita), Metabase/Grafana (leitura) |
+| Camada | Conteúdo | Formato | Notebook responsável | Acesso |
+|---|---|---|---|---|
+| **Bronze** | Dados brutos, sem transformação, espelho da fonte (API/DB) | Iceberg (Parquet) | `01_extracao_bronze.ipynb` | Spark (escrita), Trino (leitura) |
+| **Prata** | Dados limpos, tipados, deduplicados, com regras de qualidade | Iceberg (Parquet) | `02_tratamento_prata.ipynb` | Spark (escrita), Trino (leitura) |
+| **Ouro** | Tabelas dimensionais e fato (modelo estrela) | Iceberg (Parquet) | `03_modelagem_ouro.ipynb` | Spark (escrita), Trino (leitura) |
+| **Ouro -> Postgres** | Export das tabelas Ouro para banco analítico | Tabelas Postgres | `04_carga_postgres.ipynb` | Spark (escrita), Metabase/Grafana (leitura futura) |
+
+> Todas as camadas (incluindo Ouro) são gravadas primeiro em Iceberg/MinIO, garantindo versionamento, consulta via Trino e histórico de snapshots. A camada Ouro é, em seguida, **replicada para o Postgres** (Job 4) para consumo por ferramentas de BI tradicionais.
 
 ## Stacks
 
 | Stack | Função | Status |
 |---|---|---|
-| `minio` | Object storage S3-compatible (warehouse Iceberg) | ✅ |
-| `postgres` | Metastore JDBC do Iceberg + banco da camada Ouro | ✅ |
-| `trino` | Engine de consulta SQL sobre Iceberg (Bronze/Prata) | ✅ |
-| `spark-jupyter` | Notebooks Spark para ETL (extração, transformação, carga) | ✅ |
-| `jenkins` | Orquestração: agenda e executa os notebooks `.ipynb` | ✅ |
+| `minio` | Object storage S3-compatible (warehouse Iceberg: bronze, prata, ouro) | ✅ |
+| `postgres` | Metastore JDBC do Iceberg + banco analítico (`analytics`) da camada Ouro | ✅ |
+| `trino` | Engine de consulta SQL sobre Iceberg (Bronze, Prata e Ouro) | ✅ |
+| `spark-jupyter` | Notebooks Spark para ETL (extração, transformação, modelagem, carga) | ✅ |
+| `jenkins` | **Orquestrador**: agenda e executa os notebooks `.ipynb` em sequência | ✅ |
 | `dbeaver` | Cliente SQL para consulta via Trino/Postgres | ✅ |
-| `metabase` | Dashboards e BI sobre a camada Ouro | 🔜 |
+| `metabase` | Dashboards e BI sobre a camada Ouro (Postgres) | 🔜 |
 | `grafana` | Monitoramento e dashboards operacionais | 🔜 |
 
 ## Estrutura de Pastas
@@ -76,7 +93,16 @@ Data-Lakehouse
 │   ├── dbeaver
 │   │   └── dbeaver.yml
 │   ├── jenkins
-│   │   └── jenkins.yml
+│   │   ├── jenkins.yml
+│   │   └── jobs
+│   │       ├── 01-extracao-bronze
+│   │       │   └── Jenkinsfile
+│   │       ├── 02-tratamento-prata
+│   │       │   └── Jenkinsfile
+│   │       ├── 03-modelagem-ouro
+│   │       │   └── Jenkinsfile
+│   │       └── 04-carga-postgres
+│   │           └── Jenkinsfile
 │   ├── minio
 │   │   └── minio.yml
 │   ├── postgres
@@ -84,7 +110,10 @@ Data-Lakehouse
 │   ├── spark-jupyter
 │   │   ├── spark-jupyter.yml
 │   │   └── notebooks
-│   │       └── extracao_spark.ipynb
+│   │       ├── 01_extracao_bronze.ipynb
+│   │       ├── 02_tratamento_prata.ipynb
+│   │       ├── 03_modelagem_ouro.ipynb
+│   │       └── 04_carga_postgres.ipynb
 │   └── trino
 │       ├── trino.yml
 │       └── catalog
@@ -124,7 +153,7 @@ s3.aws-access-key=<access-key>
 s3.aws-secret-key=<secret-key>
 ```
 
-> O mesmo catálogo (`catalog-name=lakehouse`) e o mesmo `warehouse-dir` devem ser usados na configuração do Spark, garantindo que ambos leiam/escrevam nas mesmas tabelas.
+> O mesmo catálogo (`catalog-name=lakehouse`) e o mesmo `warehouse-dir` devem ser usados na configuração do Spark (dentro dos notebooks), garantindo que Spark e Trino leiam/escrevam nas mesmas tabelas.
 
 ## Subindo as Stacks
 
@@ -144,60 +173,108 @@ docker compose -f portainer-stacks/spark-jupyter/spark-jupyter.yml up -d
 # 4. Consulta
 docker compose -f portainer-stacks/trino/trino.yml up -d
 
-# 5. Clientes / orquestração
-docker compose -f portainer-stacks/dbeaver/dbeaver.yml up -d
+# 5. Orquestração e clientes
 docker compose -f portainer-stacks/jenkins/jenkins.yml up -d
+docker compose -f portainer-stacks/dbeaver/dbeaver.yml up -d
 ```
 
-## Fluxo de ETL
+## Fluxo de ETL (orquestrado pelo Jenkins)
 
-1. **Extração (Bronze)**: notebook Spark consome API pública ou banco de dados externo e grava os dados crus em `iceberg.bronze.<tabela>`, usando `MERGE INTO` para cargas incrementais (upsert por chave de negócio).
-2. **Transformação (Prata)**: notebook Spark lê a Bronze, aplica limpeza, tipagem, deduplicação e regras de qualidade, gravando em `iceberg.prata.<tabela>`.
-3. **Agregação (Ouro)**: notebook Spark lê a Prata, aplica agregações/modelagem analítica e grava em tabelas Postgres (banco da camada Ouro).
-4. **Orquestração**: Jenkins agenda e executa os notebooks `.ipynb` em sequência (Bronze → Prata → Ouro), via job pipeline.
-5. **Consulta**: Trino expõe Bronze e Prata para consulta ad-hoc via DBeaver. A camada Ouro é consultada diretamente no Postgres (futuramente via Metabase/Grafana).
+O Jenkins é o **gatilho de todo o pipeline**. Nenhum notebook é executado manualmente — cada etapa abaixo corresponde a um job Jenkins, executado em sequência (cada job dispara o próximo ao terminar com sucesso):
 
-## Exemplo: Carga Incremental (Bronze)
+1. **Job 1 — Extração (Bronze)**: executa `01_extracao_bronze.ipynb`. Consome a API pública, grava dados crus em `lakehouse.bronze.data_api` via `MERGE INTO` (upsert por `id`), local `s3a://lakehouse/bronze/data_api`.
 
-```python
-# MERGE INTO garante upsert: registros existentes são atualizados,
-# novos registros são inseridos — sem duplicar e sem reprocessar tudo.
-spark.sql("""
-MERGE INTO lakehouse.bronze.posts_api AS target
-USING posts_staging AS source
-ON target.id = source.id
-WHEN MATCHED THEN UPDATE SET
-    target.userId = source.userId,
-    target.title = source.title,
-    target.body = source.body,
-    target.data_carga = source.data_carga
-WHEN NOT MATCHED THEN INSERT (userId, id, title, body, data_carga)
-VALUES (source.userId, source.id, source.title, source.body, source.data_carga)
-""")
+2. **Job 2 — Tratamento (Prata)**: executa `02_tratamento_prata.ipynb`. Lê a Bronze, aplica limpeza, padronização de tipos/strings, deduplicação e validações de qualidade, grava em `lakehouse.prata.data_api` via `MERGE INTO`, local `s3a://lakehouse/prata/data_api`.
+
+3. **Job 3 — Modelagem (Ouro)**: executa `03_modelagem_ouro.ipynb`. Lê a Prata, monta o modelo estrela (`tab_dim_produto`, `tab_dim_categoria`, `tab_dim_data`, `tab_fato_vendas`) e grava em Iceberg em `s3a://lakehouse/ouro/tab_dim_vendas/...` e `s3a://lakehouse/ouro/tab_fato_vendas`.
+
+4. **Job 4 — Carga Postgres**: executa `04_carga_postgres.ipynb`. Lê as tabelas Ouro (Iceberg) e replica para o Postgres (database `analytics`, schema `ouro`), via JDBC, para consumo por BI.
+
+### Execução dos notebooks pelo Jenkins
+
+Cada job Jenkins executa o respectivo `.ipynb` de forma não interativa dentro do container Spark/Jupyter, por exemplo via `papermill`:
+
+```bash
+docker exec spark-jupyter papermill \
+  /home/jovyan/notebooks/01_extracao_bronze.ipynb \
+  /home/jovyan/notebooks/output/01_extracao_bronze_$(date +%Y%m%d_%H%M%S).ipynb
 ```
 
-## Verificando o Pipeline
+ou via `jupyter nbconvert`:
+
+```bash
+docker exec spark-jupyter jupyter nbconvert \
+  --to notebook --execute \
+  /home/jovyan/notebooks/01_extracao_bronze.ipynb \
+  --output /home/jovyan/notebooks/output/01_extracao_bronze_out.ipynb
+```
+
+O notebook executado (com outputs/logs de cada célula) é salvo em `notebooks/output/`, servindo como registro de execução/auditoria do job.
+
+### Encadeamento dos jobs
+
+No Jenkins, configure os jobs com **"Build after other projects are built"** (ou, em pipeline declarativa, um `Jenkinsfile` único orquestrando os 4 estágios):
+
+```groovy
+pipeline {
+    agent any
+    stages {
+        stage('Bronze')   { steps { sh 'docker exec spark-jupyter papermill .../01_extracao_bronze.ipynb ...' } }
+        stage('Prata')    { steps { sh 'docker exec spark-jupyter papermill .../02_tratamento_prata.ipynb ...' } }
+        stage('Ouro')     { steps { sh 'docker exec spark-jupyter papermill .../03_modelagem_ouro.ipynb ...' } }
+        stage('Postgres') { steps { sh 'docker exec spark-jupyter papermill .../04_carga_postgres.ipynb ...' } }
+    }
+}
+```
+
+Cada `stage` só inicia se o anterior terminar com sucesso — se o Job 1 falhar (ex: API indisponível), os jobs 2-4 não são executados, evitando processar dados parciais/corrompidos.
+
+### Agendamento
+
+O Jenkins pode disparar a pipeline completa por um trigger `cron` (ex: diário):
+
+```groovy
+triggers {
+    cron('0 6 * * *')  // todos os dias às 06:00
+}
+```
+
+## Consulta (Trino)
+
+Trino expõe Bronze, Prata e Ouro para consulta ad-hoc via DBeaver:
 
 ```sql
--- Via Trino
+-- Schemas disponíveis
 SHOW SCHEMAS FROM iceberg;
-SELECT * FROM iceberg.bronze.posts_api LIMIT 10;
+
+-- Camada Bronze (dados crus)
+SELECT * FROM iceberg.bronze.data_api LIMIT 10;
+
+-- Camada Prata (dados tratados)
+SELECT * FROM iceberg.prata.data_api LIMIT 10;
+
+-- Camada Ouro (modelo dimensional)
+SELECT * FROM iceberg.ouro.tab_dim_produto LIMIT 10;
+SELECT * FROM iceberg.ouro.tab_fato_vendas LIMIT 10;
 
 -- Histórico de snapshots (Iceberg)
-SELECT * FROM iceberg.bronze."posts_api$history";
+SELECT * FROM iceberg.bronze."data_api$history";
 ```
+
+A camada Ouro também é consultável diretamente no Postgres (`analytics.ouro.*`), após o Job 4 (futuramente via Metabase/Grafana).
 
 ## Próximos Passos
 
 - [ ] Migrar a orquestração de containers para **Docker Swarm**
-- [ ] Implementar camada **Prata** com regras de qualidade e deduplicação
-- [ ] Implementar camada **Ouro** com export para Postgres
-- [ ] Adicionar stack **Metabase** para dashboards sobre a camada Ouro
-- [ ] Adicionar stack **Grafana** para monitoramento operacional
-- [ ] Configurar jobs Jenkins para execução agendada dos notebooks (Bronze → Prata → Ouro)
-- [ ] Adicionar testes de qualidade de dados (ex: Great Expectations) entre camadas
+- [ ] Criar os `Jenkinsfile`s dos 4 jobs (`01` a `04`) com execução via `papermill`
+- [ ] Configurar o encadeamento e o agendamento (`cron`) da pipeline completa no Jenkins
+- [ ] Adicionar stack **Metabase** para dashboards sobre a camada Ouro (Postgres)
+- [ ] Adicionar stack **Grafana** para monitoramento operacional e da pipeline (status dos jobs Jenkins)
+- [ ] Adicionar testes de qualidade de dados (ex: Great Expectations) entre camadas, como etapa dos jobs
+- [ ] Configurar notificações do Jenkins (e-mail/Slack) em caso de falha de algum job
 
 ## Notas de Segurança
 
-- Credenciais (Postgres, MinIO) devem ser gerenciadas via `.env` e **nunca** versionadas em texto puro nos arquivos `.properties`/`.yml`.
+- Credenciais (Postgres, MinIO) devem ser gerenciadas via `.env`/credenciais do Jenkins, e **nunca** versionadas em texto puro nos arquivos `.properties`/`.yml`/notebooks.
 - Avaliar uso de Docker Secrets ao migrar para Docker Swarm.
+- Os jobs Jenkins devem usar credenciais armazenadas no **Credentials Manager** do próprio Jenkins, injetadas como variáveis de ambiente nos notebooks (evitar hardcode de senhas nos `.ipynb`).
