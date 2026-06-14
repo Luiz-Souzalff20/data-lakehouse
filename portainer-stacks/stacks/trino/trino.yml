@@ -1,63 +1,27 @@
-version: "3.8"
-
-# ============================================================
-# STACK: TRINO
-# Descrição: Query engine distribuído para consultas no datalake
-# Conecta com: MinIO (S3), PostgreSQL, Apache Iceberg
-# ============================================================
+version: "3.9"
 
 services:
 
-  trino-coordinator:
-    image: trinodb/trino:435
-    container_name: trino-coordinator
-    hostname: trino-coordinator
+  trino:
+    image: trinodb/trino:477
+
+    container_name: trino
+
     ports:
       - "8081:8080"
-    volumes:
-      - trino_data:/data/trino
-      - ./trino/config/coordinator/config.properties:/etc/trino/config.properties
-      - ./trino/config/coordinator/jvm.config:/etc/trino/jvm.config
-      - ./trino/config/coordinator/node.properties:/etc/trino/node.properties
-      - ./trino/catalog/minio.properties:/etc/trino/catalog/minio.properties
-      - ./trino/catalog/iceberg.properties:/etc/trino/catalog/iceberg.properties
-      - ./trino/catalog/postgresql.properties:/etc/trino/catalog/postgresql.properties
-    environment:
-      - JAVA_TOOL_OPTIONS=-Xmx2G
-    networks:
-      - lakehouse
-    restart: unless-stopped
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8081/v1/info"]
-      interval: 30s
-      timeout: 10s
-      retries: 5
-      start_period: 60s
 
-  trino-worker:
-    image: trinodb/trino:435
-    container_name: trino-worker
-    hostname: trino-worker
     volumes:
-      - trino_worker_data:/data/trino
-      - ./trino/config/worker/config.properties:/etc/trino/config.properties
-      - ./trino/config/worker/jvm.config:/etc/trino/jvm.config
-      - ./trino/config/worker/node.properties:/etc/trino/node.properties
-      - ./trino/catalog/minio.properties:/etc/trino/catalog/minio.properties
-      - ./trino/catalog/iceberg.properties:/etc/trino/catalog/iceberg.properties
-      - ./trino/catalog/postgresql.properties:/etc/trino/catalog/postgresql.properties
-    environment:
-      - JAVA_TOOL_OPTIONS=-Xmx2G
+      - /home/luiz/Documentos/data-lakehouse-docker/data-lakehouse/portainer-stacks/stacks/trino/catalog:/etc/trino/catalog
+      - trino_data:/var/trino
+
+    restart: unless-stopped
+
     networks:
       - lakehouse
-    depends_on:
-      trino-coordinator:
-        condition: service_healthy
-    restart: unless-stopped
 
 volumes:
+  trino_catalog:
   trino_data:
-  trino_worker_data:
 
 networks:
   lakehouse:

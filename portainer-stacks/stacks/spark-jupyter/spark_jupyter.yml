@@ -1,0 +1,53 @@
+version: "3.9"
+
+services:
+
+  spark:
+    image: apache/spark:4.0.0
+
+    container_name: spark
+
+    hostname: spark
+
+    command: >
+      /opt/spark/bin/spark-class
+      org.apache.spark.deploy.master.Master
+
+    ports:
+      - "4040:4040"
+      - "7077:7077"
+
+    volumes:
+      - spark_data:/opt/spark/work-dir
+
+    restart: unless-stopped
+
+    networks:
+      - lakehouse
+
+  jupyter:
+    image: jupyter/pyspark-notebook:latest
+
+    container_name: jupyter
+
+    ports:
+      - "8888:8888"
+
+    environment:
+      JUPYTER_ENABLE_LAB: "yes"
+
+    volumes:
+      - jupyter_data:/home/jovyan/work
+
+    restart: unless-stopped
+
+    networks:
+      - lakehouse
+
+volumes:
+  spark_data:
+  jupyter_data:
+
+networks:
+  lakehouse:
+    external: true

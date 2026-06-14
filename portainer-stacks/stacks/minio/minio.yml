@@ -1,8 +1,10 @@
 version: "3.9"
 
 services:
+
   minio:
     image: minio/minio:RELEASE.2025-09-07T16-13-09Z-cpuv1
+
     container_name: minio
 
     restart: unless-stopped
@@ -23,9 +25,31 @@ services:
     networks:
       - lakehouse
 
-networks:
-  lakehouse:
-    external: true
+  minio-init:
+    image: minio/mc:latest
+
+    container_name: minio-init
+
+    depends_on:
+      - minio
+
+    restart: "no"
+
+    entrypoint: >
+      /bin/sh -c "
+      sleep 15;
+      mc alias set local http://minio:9000 admin_minio Grunt9-Relenting6-Hula5-Catcall9-Residue3;
+      mc mb --ignore-existing local/lakehouse;
+      mc anonymous set private local/lakehouse;
+      echo 'Bucket lakehouse criado com sucesso.';
+      "
+
+    networks:
+      - lakehouse
 
 volumes:
   minio_data:
+
+networks:
+  lakehouse:
+    external: true
