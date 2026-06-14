@@ -26,7 +26,7 @@ services:
       - lakehouse
 
   minio-init:
-    image: minio/mc:latest
+    image: minio/mc:RELEASE.2025-08-13T08-35-41Z-cpuv1
 
     container_name: minio-init
 
