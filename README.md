@@ -4,7 +4,7 @@ Projeto de engenharia de dados containerizado, com arquitetura medalhão (bronze
 
 ## Visão Geral da Arquitetura
 
-![Arquitetura](../.assets/pipeline.png)
+![Arquitetura](./assets/pipeline.png)
 
 **Catálogo Iceberg**: metastore JDBC compartilhado no Postgres (`metastore`), usado tanto pelo Spark (escrita) quanto pelo Trino (leitura).
 
