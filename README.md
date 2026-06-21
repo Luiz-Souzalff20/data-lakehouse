@@ -250,7 +250,7 @@ A próxima etapa do projeto é **migrar a orquestração de containers para Dock
 - [ ] Migrar a orquestração de containers para **Docker Swarm**
 - [ ] Adicionar testes de qualidade de dados (ex: Great Expectations) entre camadas, como etapa dos jobs
 - [ ] Configurar notificações do Jenkins (e-mail/Slack) em caso de falha de algum job
-- [ ] Adicionar uma nova stack para utilizado do OpenMetadata, para governança e observabilidade de dados
+- [ ] Adicionar uma nova stack para o OpenMetadata, para governança e observabilidade de dados
 
 ## Notas de Segurança
 
