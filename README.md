@@ -5,64 +5,7 @@ Projeto de engenharia de dados containerizado, com arquitetura medalhão (bronze
 ## Visão Geral da Arquitetura
 
 ```
-                ┌──────────────┐
-                │  APIs / DBs  │
-                │   externas   │
-                └──────┬───────┘
-                       │
-                       ▼
-            ┌──────────────────────┐
-            │       Jenkins         │
-            │  (orquestrador)        │
-            │                        │
-            │  Job 1 -> 01_extracao  │──┐
-            │  Job 2 -> 02_tratamento│  │
-            │  Job 3 -> 03_modelagem │  │  executa cada
-            │  Job 4 -> 04_carga_pg  │  │  notebook .ipynb
-            └───────────┬────────────┘  │  via Spark
-                        │ aciona em      │
-                        │ sequência      ▼
-                        │         ┌─────────────┐
-                        └────────▶│Spark/Jupyter│
-                                  └──────┬──────┘
-                                         │
-        ┌────────────────────────────────┼────────────────────────────────┐
-        ▼                                ▼                                 ▼
-    ┌────────┐                     ┌─────────┐                       ┌─────────┐
-    │ Bronze │ ── Job 1 grava ──▶  │  Prata  │ ── Job 2 grava ──▶    │  Ouro   │
-    │ (raw)  │                     │(cleaned)│                       │ (dim/   │
-    └────────┘                     └─────────┘                       │  fato)  │
-        │                               │                             └────┬────┘
-        └────────── MinIO (S3) + Iceberg ──────────────────────────────────┘
-                       │                                                    │
-                       ▼                                              Job 3 grava
-                  ┌─────────┐                                              │
-                  │  Trino  │ ── consulta Bronze, Prata e Ouro             │
-                  └────┬────┘                                              │
-                       │                                                    │
-              ┌────────┴────────┐                                          │
-              ▼                 ▼                                          ▼
-         ┌─────────┐      ┌──────────┐                          Job 4 exporta Ouro
-         │ DBeaver │      │ Metabase │                 para Postgres
-         └─────────┘      └──────────┘                                    │
-                                                                            ▼
-                                                                     ┌──────────┐
-                                                                     │ Postgres │
-                                                                     │(analytics)│
-                                                                     └──────────┘
-
-         ┌──────────────────────────────────────────────────────────┐
-         │                     Grafana                              │
-         │                                                          │
-         │  Monitoramento da infraestrutura:                        │
-         │  - Jenkins                                               │
-         │  - Spark                                                 │
-         │  - MinIO                                                 │
-         │  - Trino                                                 │
-         │  - PostgreSQL                                            │
-         │  - Containers Docker                                     │
-         │  - CPU, Memória, Disco e Rede                            │
-         └──────────────────────────────────────────────────────────┘
+.assets/pipeline_data_lakehouse.png
 ```
 
 **Catálogo Iceberg**: metastore JDBC compartilhado no Postgres (`metastore`), usado tanto pelo Spark (escrita) quanto pelo Trino (leitura).
