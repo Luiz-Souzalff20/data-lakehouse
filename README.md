@@ -104,15 +104,8 @@ Data-Lakehouse
 │   │   └── grafana.yml
 │   ├── jenkins
 │   │   ├── jenkins.yml
-│   │   └── jobs
-│   │       ├── 01-extracao-bronze
-│   │       │   └── Jenkinsfile
-│   │       ├── 02-tratamento-prata
-│   │       │   └── Jenkinsfile
-│   │       ├── 03-modelagem-ouro
-│   │       │   └── Jenkinsfile
-│   │       └── 04-carga-postgres
-│   │           └── Jenkinsfile
+│   │   └── comandos
+│   │       ├── comandos.txt
 │   ├── metabase
 │   │   └── metabase.yml
 │   ├── minio
