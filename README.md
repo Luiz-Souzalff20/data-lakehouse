@@ -164,26 +164,8 @@ s3.aws-secret-key=<secret-key>
 Cada stack é independente e deve ser implantada via Portainer (ou `docker compose`) na ordem abaixo, respeitando dependências:
 
 ```bash
-# 1. Rede compartilhada
-docker network create lakehouse
-
-# 2. Infraestrutura base
-docker compose -f portainer-stacks/minio/minio.yml up -d
-docker compose -f portainer-stacks/postgres/postgres.yml up -d
-
-# 3. Processamento
-docker compose -f portainer-stacks/spark-jupyter/spark-jupyter.yml up -d
-
-# 4. Consulta
-docker compose -f portainer-stacks/trino/trino.yml up -d
-
-# 5. Orquestração e clientes
-docker compose -f portainer-stacks/jenkins/jenkins.yml up -d
-docker compose -f portainer-stacks/dbeaver/dbeaver.yml up -d
-
-# 6. BI e monitoramento
-docker compose -f portainer-stacks/metabase/metabase.yml up -d
-docker compose -f portainer-stacks/grafana/grafana.yml up -d
+# Comandos para criação do ambiente e configuração
+sudo bash ./data-lakehouse/portainer-stacks/create-project.sh
 ```
 
 ## Fluxo de ETL (orquestrado pelo Jenkins)
