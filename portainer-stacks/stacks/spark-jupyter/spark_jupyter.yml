@@ -35,6 +35,7 @@ services:
 
     environment:
       JUPYTER_ENABLE_LAB: "yes"
+      JUPYTER_TOKEN: "4f1c762d48f2a9fd5521e529efd1e6e9dc7d5105ce61649f"   # funciona como senha no login
 
     volumes:
       - jupyter_data:/home/jovyan/work

@@ -11,7 +11,7 @@ services:
       - "8081:8080"
 
     volumes:
-      - /home/luiz/Documentos/data-lakehouse-docker/data-lakehouse/portainer-stacks/stacks/trino/catalog:/etc/trino/catalog
+      - ~/Documentos/data-lakehouse-docker/data-lakehouse/portainer-stacks/stacks/trino/catalog:/etc/trino/catalog
       - trino_data:/var/trino
 
     restart: unless-stopped

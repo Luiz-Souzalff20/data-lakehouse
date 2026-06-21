@@ -40,8 +40,11 @@ services:
       sleep 15;
       mc alias set local http://minio:9000 admin_minio Grunt9-Relenting6-Hula5-Catcall9-Residue3;
       mc mb --ignore-existing local/lakehouse;
+      mc mb --ignore-existing local/lakehouse/bronze;
+      mc mb --ignore-existing local/lakehouse/prata;
+      mc mb --ignore-existing local/lakehouse/ouro;
       mc anonymous set private local/lakehouse;
-      echo 'Bucket lakehouse criado com sucesso.';
+      echo 'Buckets criados com sucesso.';
       "
 
     networks:
