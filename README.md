@@ -248,10 +248,9 @@ A próxima etapa do projeto é **migrar a orquestração de containers para Dock
 ## Próximos Passos
 
 - [ ] Migrar a orquestração de containers para **Docker Swarm**
-- [ ] Criar os `Jenkinsfile`s dos 4 jobs (`01` a `04`) com execução via `papermill`
-- [ ] Configurar o encadeamento e o agendamento (`cron`) da pipeline completa no Jenkins
 - [ ] Adicionar testes de qualidade de dados (ex: Great Expectations) entre camadas, como etapa dos jobs
 - [ ] Configurar notificações do Jenkins (e-mail/Slack) em caso de falha de algum job
+- [ ] Adicionar uma nova stack para utilizado do OpenMetadata, para governança e observabilidade de dados
 
 ## Notas de Segurança
 
