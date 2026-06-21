@@ -49,12 +49,20 @@ Projeto de engenharia de dados containerizado, com arquitetura medalhão (bronze
                                                                      ┌──────────┐
                                                                      │ Postgres │
                                                                      │(analytics)│
-                                                                     └─────┬────┘
-                                                                           │
-                                                                           ▼
-                                                                     ┌──────────┐
-                                                                     │ Grafana  │
                                                                      └──────────┘
+
+         ┌──────────────────────────────────────────────────────────┐
+         │                     Grafana                              │
+         │                                                          │
+         │  Monitoramento da infraestrutura:                        │
+         │  - Jenkins                                               │
+         │  - Spark                                                 │
+         │  - MinIO                                                 │
+         │  - Trino                                                 │
+         │  - PostgreSQL                                            │
+         │  - Containers Docker                                     │
+         │  - CPU, Memória, Disco e Rede                            │
+         └──────────────────────────────────────────────────────────┘
 ```
 
 **Catálogo Iceberg**: metastore JDBC compartilhado no Postgres (`metastore`), usado tanto pelo Spark (escrita) quanto pelo Trino (leitura).
@@ -182,21 +190,15 @@ O Jenkins é o **gatilho de todo o pipeline**. Nenhum notebook é executado manu
 
 ### Execução dos notebooks pelo Jenkins
 
-Cada job Jenkins executa o respectivo `.ipynb` de forma não interativa dentro do container Spark/Jupyter, por exemplo via `papermill`:
+Cada job Jenkins executa o respectivo `.ipynb` de forma não interativa dentro do container Jupyter com o comando:
 
 ```bash
-docker exec spark-jupyter papermill \
-  /home/jovyan/notebooks/01_extracao_bronze.ipynb \
-  /home/jovyan/notebooks/output/01_extracao_bronze_$(date +%Y%m%d_%H%M%S).ipynb
-```
-
-ou via `jupyter nbconvert`:
-
-```bash
-docker exec spark-jupyter jupyter nbconvert \
-  --to notebook --execute \
-  /home/jovyan/notebooks/01_extracao_bronze.ipynb \
-  --output /home/jovyan/notebooks/output/01_extracao_bronze_out.ipynb
+docker exec -it jupyter \
+/opt/conda/bin/jupyter nbconvert \
+--to notebook \
+--execute \
+--inplace \
+/home/jovyan/work/01_extracao_bronze.ipynb
 ```
 
 O notebook executado (com outputs/logs de cada célula) é salvo em `notebooks/output/`, servindo como registro de execução/auditoria do job.
@@ -206,15 +208,8 @@ O notebook executado (com outputs/logs de cada célula) é salvo em `notebooks/o
 No Jenkins, configure os jobs com **"Build after other projects are built"** (ou, em pipeline declarativa, um `Jenkinsfile` único orquestrando os 4 estágios):
 
 ```groovy
-pipeline {
-    agent any
-    stages {
-        stage('Bronze')   { steps { sh 'docker exec spark-jupyter papermill .../01_extracao_bronze.ipynb ...' } }
-        stage('Prata')    { steps { sh 'docker exec spark-jupyter papermill .../02_tratamento_prata.ipynb ...' } }
-        stage('Ouro')     { steps { sh 'docker exec spark-jupyter papermill .../03_modelagem_ouro.ipynb ...' } }
-        stage('Postgres') { steps { sh 'docker exec spark-jupyter papermill .../04_carga_postgres.ipynb ...' } }
-    }
-}
+Segue os comando para as pipelines:
+- ./data-lakehouse/portainer-stacks/stacks/jenkins/comandos/comandos.txt
 ```
 
 Cada `stage` só inicia se o anterior terminar com sucesso — se o Job 1 falhar (ex: API indisponível), os jobs 2-4 não são executados, evitando processar dados parciais/corrompidos.
