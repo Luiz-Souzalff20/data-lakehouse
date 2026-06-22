@@ -32,7 +32,7 @@ Projeto de engenharia de dados containerizado, com arquitetura medalhão (bronze
 | `jenkins` | **Orquestrador**: agenda e executa os notebooks `.ipynb` em sequência | ✅ |
 | `dbeaver` | Cliente SQL para consulta via Trino/Postgres | ✅ |
 | `metabase` | Dashboards e BI sobre a camada Ouro (Postgres) | ✅ |
-| `grafana` | Monitoramento e dashboards operacionais | ✅ |
+| `grafana` | Monitoramento e dashboards operacionais com plugin do Prometheus | ✅ |
 
 ## Estrutura de Pastas
 
@@ -43,10 +43,13 @@ Data-Lakehouse
 │   │   └── dbeaver.yml
 │   ├── grafana
 │   │   └── grafana.yml
+│   │   └── prometheus
+│   │       └── prometheus.yml
+│   │       └── prometheus-portainer.yml
 │   ├── jenkins
 │   │   ├── jenkins.yml
 │   │   └── comandos
-│   │       ├── comandos.txt
+│   │       └── comandos.txt
 │   ├── metabase
 │   │   └── metabase.yml
 │   ├── minio

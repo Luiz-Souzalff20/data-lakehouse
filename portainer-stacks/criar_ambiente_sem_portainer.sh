@@ -159,9 +159,10 @@ docker restart jupyter
 ok "Jupyter reiniciado."
 
 # =============================================================================
-# 10. GRAFANA (monitoramento da infraestrutura)
+# 10. GRAFANA + Prometheus (monitoramento da infraestrutura)
 # =============================================================================
 compose_up "/stacks/grafana/grafana.yml"
+compose_up "/stacks/grafana/prometheus/prometheus-portainer.yml"
 
 # =============================================================================
 # RESUMO

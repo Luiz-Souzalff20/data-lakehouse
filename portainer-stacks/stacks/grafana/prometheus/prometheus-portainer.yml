@@ -1,25 +1,29 @@
 services:
   prometheus:
     image: prom/prometheus
-    container_name: prometheus
-    volumes:
-      - ~/Documentos/data-lakehouse-docker/data-lakehouse/portainer-stacks/stacks/grafana/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
     ports:
       - "9090:9090"
-
-  node-exporter:
-    image: prom/node-exporter
-    network_mode: host
-    pid: host
+    volumes:
+      - ~/Documentos/data-lakehouse-docker/data-lakehouse/portainer-stacks/stacks/grafana/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    networks:
+      - lakehouse
 
   cadvisor:
     image: gcr.io/cadvisor/cadvisor:v0.47.0
+    privileged: true
     ports:
       - "8082:8080"
     volumes:
-      - /var/run/docker.sock:/var/run/docker.sock:ro
-      - /sys:/sys:ro
+      - /:/rootfs:ro
       - /var/run:/var/run:ro
+      - /sys:/sys:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - /var/snap/docker/common/var-lib-docker:/var/lib/docker:ro
     command:
       - --docker_only=true
-      - --disable_metrics=disk,diskIO
+    networks:
+      - lakehouse
+
+networks:
+  lakehouse:
+    external: true
